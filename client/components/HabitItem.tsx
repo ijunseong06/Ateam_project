@@ -5,6 +5,7 @@ import type { Habit, Day } from '../types';
 interface HabitItemProps {
   habit: Habit;
   onToggle: () => void;
+  onEdit: () => void;
 }
 
 const DayIndicator: React.FC<{ day: Day, isActive: boolean }> = ({ day, isActive }) => (
@@ -13,11 +14,14 @@ const DayIndicator: React.FC<{ day: Day, isActive: boolean }> = ({ day, isActive
   </div>
 );
 
-const HabitItem: React.FC<HabitItemProps> = ({ habit, onToggle }) => {
+const HabitItem: React.FC<HabitItemProps> = ({ habit, onToggle, onEdit }) => {
   const allDays: Day[] = ['월', '화', '수', '목', '금', '토', '일'];
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-gray-200/50 transition-all duration-300 hover:shadow-xl">
+    <div 
+        onClick={onEdit}
+        className="bg-white/60 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-gray-200/50 transition-all duration-300 hover:shadow-xl cursor-pointer active:scale-[0.98]"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <div>
@@ -25,7 +29,10 @@ const HabitItem: React.FC<HabitItemProps> = ({ habit, onToggle }) => {
             {habit.description && <p className="text-sm text-gray-500 mt-1">{habit.description}</p>}
           </div>
         </div>
-        <div className="flex items-center">
+        <div 
+            className="flex items-center" 
+            onClick={(e) => e.stopPropagation()}
+        >
           <label htmlFor={`toggle-${habit.id}`} className="flex items-center cursor-pointer">
             <div className="relative">
               <input type="checkbox" id={`toggle-${habit.id}`} className="sr-only" checked={habit.activate} onChange={onToggle} />
