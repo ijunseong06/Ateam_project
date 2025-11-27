@@ -5,11 +5,11 @@ import HabitItem from './HabitItem';
 
 interface HabitListProps {
   habits: Habit[];
-  onToggleHabit: (id: number) => void;
-  onEditHabit: (habit: Habit) => void;
+  onRecordHabit: (id: number, result: boolean) => void;
+  onHabitClick: (habit: Habit) => void;
 }
 
-const HabitList: React.FC<HabitListProps> = ({ habits, onToggleHabit, onEditHabit }) => {
+const HabitList: React.FC<HabitListProps> = ({ habits, onRecordHabit, onHabitClick }) => {
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold text-gray-700 px-2">오늘의 습관</h2>
@@ -17,8 +17,8 @@ const HabitList: React.FC<HabitListProps> = ({ habits, onToggleHabit, onEditHabi
         <HabitItem 
             key={habit.id} 
             habit={habit} 
-            onToggle={() => onToggleHabit(habit.id)} 
-            onEdit={() => onEditHabit(habit)}
+            onRecord={(result) => onRecordHabit(habit.id, result)} 
+            onClick={() => onHabitClick(habit)}
         />
       ))}
     </div>
