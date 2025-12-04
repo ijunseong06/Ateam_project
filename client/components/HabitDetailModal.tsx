@@ -86,7 +86,8 @@ const HabitDetailModal: React.FC<HabitDetailModalProps> = ({ isOpen, onClose, ha
     return `${date.getMonth() + 1}/${date.getDate()} (${['일','월','화','수','목','금','토'][date.getDay()]})`;
   };
 
-  const formatTime = (dateString: string) => {
+  const formatTime = (dateString: string, recordTime?: string | null) => {
+    if (recordTime) return recordTime; // Use explicit slot time if available
     const date = new Date(dateString);
     return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   };
@@ -203,7 +204,7 @@ const HabitDetailModal: React.FC<HabitDetailModalProps> = ({ isOpen, onClose, ha
                                 <div key={record.id} className="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-lg text-sm">
                                     <div className="flex flex-col">
                                         <span className="font-bold text-gray-600">{formatDate(record.created_at)}</span>
-                                        <span className="text-xs text-gray-400">{formatTime(record.created_at)}</span>
+                                        <span className="text-xs text-gray-400">{formatTime(record.created_at, record.recordTime)}</span>
                                     </div>
                                     <span className={`font-bold px-2 py-1 rounded ${record.result ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                                         {record.result ? '성공' : '실패'}

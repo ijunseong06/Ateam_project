@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import HabitList from './components/HabitList';
-import FloatingActionButton from './components/FloatingActionButton';
 import BottomNavigation from './components/BottomNavigation';
 import AccountView from './components/AccountView';
 import AddHabitModal from './components/AddHabitModal';
 import HabitDetailModal from './components/HabitDetailModal';
 import Onboarding from './components/Onboarding';
+import AIChatView from './components/AIChatView';
+import FloatingActionButton from './components/FloatingActionButton';
 import type { Habit, Day, HabitRecord } from './types';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
@@ -17,7 +18,9 @@ const App: React.FC = () => {
   const { session, loading: authLoading } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitsLoading, setHabitsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'habits' | 'account'>('habits');
+  
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<'habits' | 'ai' | 'account'>('habits');
   
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -86,7 +89,7 @@ const App: React.FC = () => {
         setHabits(mappedHabits);
       }
       setHabitsLoading(false);
-  }, [session]); // Removed 'habits.length' to avoid loop, kept session
+  }, [session]);
 
   // Initial Fetch & Realtime Subscription
   useEffect(() => {
@@ -126,15 +129,24 @@ const App: React.FC = () => {
     }
   }, [session, getHabitsAndRecords]);
 
-  const handleRecordHabit = async (habitId: number, result: boolean) => {
+  // Insert Record (Create)
+  const handleRecordHabit = async (habitId: number, result: boolean, targetTime?: string) => {
       if (!session) return;
+
+      const recordDate = new Date();
+      if (targetTime) {
+          const [h, m] = targetTime.split(':').map(Number);
+          recordDate.setHours(h, m, 0, 0);
+      }
+      const createdAt = recordDate.toISOString();
 
       const newRecordTemp: HabitRecord = {
           id: Date.now(), // Temporary ID for optimistic update
           user_id: session.user.id,
           habit_id: habitId,
           result: result,
-          created_at: new Date().toISOString()
+          created_at: createdAt,
+          recordTime: targetTime || null
       };
 
       // Optimistic Update
@@ -142,7 +154,6 @@ const App: React.FC = () => {
         if (h.id === habitId) {
             const updatedRecords = h.todayRecords ? [...h.todayRecords, newRecordTemp] : [newRecordTemp];
             const updated = { ...h, todayRecords: updatedRecords };
-            // If the currently selected habit is being updated, update it too
             if (selectedHabit && selectedHabit.id === habitId) {
                 setSelectedHabit(updated);
             }
@@ -159,14 +170,15 @@ const App: React.FC = () => {
                     user_id: session.user.id,
                     habit_id: habitId,
                     result: result,
-                    created_at: new Date().toISOString()
+                    created_at: createdAt,
+                    recordTime: targetTime || null
                 }
             ])
             .select();
         
         if (error) throw error;
         
-        // Update with actual DB record (replace temp)
+        // Update with actual DB record
         if (data && data[0]) {
              setHabits(prev => prev.map(h => {
                 if (h.id === habitId) {
@@ -181,6 +193,38 @@ const App: React.FC = () => {
         console.error('Error recording habit:', error);
         alert('기록을 저장하는 중 오류가 발생했습니다.');
         getHabitsAndRecords(); // Revert on error
+      }
+  };
+
+  // Delete Record (Undo)
+  const handleDeleteRecord = async (recordId: number) => {
+      if (!session) return;
+
+      // Optimistic Update
+      setHabits(prev => prev.map(h => {
+        if (h.todayRecords?.some(r => r.id === recordId)) {
+            const updatedRecords = h.todayRecords.filter(r => r.id !== recordId);
+            const updated = { ...h, todayRecords: updatedRecords };
+            if (selectedHabit && selectedHabit.id === h.id) {
+                setSelectedHabit(updated);
+            }
+            return updated;
+        }
+        return h;
+      }));
+
+      try {
+          const { error } = await supabase
+            .from('habitRecords')
+            .delete()
+            .eq('id', recordId);
+        
+        if (error) throw error;
+
+      } catch (error: any) {
+          console.error('Error deleting record:', error);
+          alert('기록을 삭제하는 중 오류가 발생했습니다.');
+          getHabitsAndRecords(); // Revert
       }
   };
 
@@ -202,9 +246,6 @@ const App: React.FC = () => {
         ]);
 
       if (error) throw error;
-      
-      // No need to manually update state here, Realtime subscription will catch it.
-      // But for instant UX, we close modal.
       setIsModalOpen(false);
 
     } catch (error: any) {
@@ -217,6 +258,30 @@ const App: React.FC = () => {
     if (!session || !editingHabit) return;
 
     try {
+        // Detect if schedule has changed to cleanup records
+        const oldDays = editingHabit.days.map(d => dayMap.indexOf(d)).sort().join(',');
+        const newDays = [...habitData.days].sort().join(',');
+        const oldTime = [...editingHabit.time].sort().join(',');
+        const newTime = [...habitData.time].sort().join(',');
+
+        const scheduleChanged = oldDays !== newDays || oldTime !== newTime;
+
+        if (scheduleChanged) {
+            // Delete today's records for this habit
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const { error: deleteError } = await supabase
+                .from('habitRecords')
+                .delete()
+                .eq('habit_id', editingHabit.id)
+                .gte('created_at', today.toISOString());
+            
+            if (deleteError) {
+                console.error("Error clearing records:", deleteError);
+            }
+        }
+
         const { error } = await supabase
             .from('habit')
             .update({
@@ -293,7 +358,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 font-sans">
       <div className="container mx-auto max-w-2xl p-4 pb-28">
-        {activeTab === 'habits' ? (
+        
+        {activeTab === 'habits' && (
             <>
                 <Header />
                 <main>
@@ -305,44 +371,54 @@ const App: React.FC = () => {
                     <HabitList 
                         habits={habits} 
                         onRecordHabit={handleRecordHabit}
+                        onDeleteRecord={handleDeleteRecord}
                         onHabitClick={handleHabitClick}
                     />
                 ) : (
                     <div className="text-center py-10 px-4 bg-white/60 rounded-2xl shadow-lg">
                         <p className="text-gray-700 font-semibold">아직 추가된 습관이 없어요.</p>
-                        <p className="text-gray-500 mt-2">우측 하단의 '+' 버튼을 눌러 첫 습관을 추가해보세요!</p>
+                        <p className="text-gray-500 mt-2">우측 하단 + 버튼을 눌러 첫 습관을 만들어보세요!</p>
                     </div>
                 )}
                 </main>
-                <FloatingActionButton onClick={openAddModal} />
             </>
-        ) : (
-            <AccountView />
+        )}
+
+        {activeTab === 'ai' && (
+            <div className="h-full pt-2">
+                <AIChatView />
+            </div>
+        )}
+
+        {activeTab === 'account' && (
+             <AccountView />
         )}
       </div>
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-      
-      {/* Habit Detail Modal */}
-      <HabitDetailModal
-        isOpen={isDetailOpen}
-        onClose={() => {
-            setIsDetailOpen(false);
-            setSelectedHabit(null);
-        }}
-        habit={selectedHabit}
-        onEdit={switchToEditMode}
+
+      <BottomNavigation 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
       />
 
-      {/* Add/Edit Modal */}
+      {/* Floating Action Button - Only for Habits Tab */}
+      {activeTab === 'habits' && (
+          <FloatingActionButton onClick={openAddModal} />
+      )}
+
+      {/* Modals */}
       <AddHabitModal 
         isOpen={isModalOpen} 
-        onClose={() => {
-            setIsModalOpen(false);
-            setEditingHabit(null);
-        }} 
+        onClose={() => { setIsModalOpen(false); setEditingHabit(null); }} 
         onSubmit={editingHabit ? handleUpdateHabit : handleAddHabit}
         initialData={editingHabit}
         onDelete={editingHabit ? handleDeleteHabit : undefined}
+      />
+
+      <HabitDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => { setIsDetailOpen(false); setSelectedHabit(null); }}
+        habit={selectedHabit}
+        onEdit={switchToEditMode}
       />
     </div>
   );

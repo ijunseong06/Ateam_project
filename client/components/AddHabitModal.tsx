@@ -17,7 +17,10 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
   const [times, setTimes] = useState<string[]>([]);
   const [currentTime, setCurrentTime] = useState('');
   const [isActive, setIsActive] = useState(true);
+  
+  // UI States
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showChangeConfirm, setShowChangeConfirm] = useState(false);
   const [isAddingTime, setIsAddingTime] = useState(false);
 
   const days: Day[] = ['월', '화', '수', '목', '금', '토', '일'];
@@ -26,6 +29,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
   useEffect(() => {
     if (isOpen) {
       setShowDeleteConfirm(false);
+      setShowChangeConfirm(false);
       setCurrentTime('');
       setIsAddingTime(false);
       if (initialData) {
@@ -78,7 +82,26 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    // Check for changes that affect schedule (Time or Days)
+    if (initialData) {
+        const initialDayIndices = initialData.days.map(d => days.indexOf(d)).sort().join(',');
+        const currentDayIndices = [...selectedDays].sort().join(',');
+        
+        const initialTimes = [...(initialData.time || [])].sort().join(',');
+        const currentTimes = [...times].sort().join(',');
+
+        if (initialDayIndices !== currentDayIndices || initialTimes !== currentTimes) {
+            setShowChangeConfirm(true);
+            return;
+        }
+    }
     
+    // If new habit or no schedule changes, submit directly
+    doSubmit();
+  };
+
+  const doSubmit = () => {
     onSubmit({ 
       name, 
       description, 
@@ -98,13 +121,11 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
     }
   };
 
-  const handleCancelDelete = () => {
-    setShowDeleteConfirm(false);
-  };
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
       <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 border border-white/50">
+        
+        {/* Delete Confirmation View */}
         {showDeleteConfirm ? (
              <div className="p-8 text-center animate-fade-in">
                 <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -117,7 +138,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
                 </p>
                 <div className="flex space-x-3">
                     <button 
-                        onClick={handleCancelDelete} 
+                        onClick={() => setShowDeleteConfirm(false)} 
                         className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
                         type="button"
                     >
@@ -132,7 +153,37 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
                     </button>
                 </div>
              </div>
+        ) : showChangeConfirm ? (
+            /* Change Schedule Confirmation View */
+            <div className="p-8 text-center animate-fade-in">
+                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i className="fa-solid fa-clock-rotate-left text-4xl text-yellow-500"></i>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">일정 변경 안내</h3>
+                <p className="text-gray-600 mb-8 leading-relaxed">
+                    일정이나 요일을 변경하면<br/>
+                    <span className="text-blue-600 font-bold">오늘의 기록이 초기화</span>됩니다.<br/>
+                    계속하시겠습니까?
+                </p>
+                <div className="flex space-x-3">
+                    <button 
+                        onClick={() => setShowChangeConfirm(false)} 
+                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+                        type="button"
+                    >
+                        취소
+                    </button>
+                    <button 
+                        onClick={doSubmit} 
+                        className="flex-1 px-4 py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
+                        type="button"
+                    >
+                        변경 및 초기화
+                    </button>
+                </div>
+             </div>
         ) : (
+            /* Main Form View */
             <div className="p-6 h-[85vh] overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">
@@ -199,8 +250,9 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isOpen, onClose, onSubmit
                 {/* Time Input */}
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                        알림 시간 <span className="text-gray-400 font-normal">(선택)</span>
+                        설정 시간 <span className="text-gray-400 font-normal">(선택)</span>
                     </label>
+                    <p className="text-xs text-gray-400 mb-2">시간을 설정하면 해당 시간마다 성공/실패 여부를 각각 기록할 수 있습니다.</p>
                     
                     {/* Time List */}
                     {times.length > 0 && (
