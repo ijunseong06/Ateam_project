@@ -18,6 +18,7 @@ const DayIndicator: React.FC<{ day: Day, isActive: boolean }> = ({ day, isActive
 const HabitItem: React.FC<HabitItemProps> = ({ habit, onRecord, onDeleteRecord, onClick }) => {
   const allDays: Day[] = ['월', '화', '수', '목', '금', '토', '일'];
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   
   // Calculate if today is a scheduled day
   const today = new Date();
@@ -67,6 +68,18 @@ const HabitItem: React.FC<HabitItemProps> = ({ habit, onRecord, onDeleteRecord, 
 
   const handleAction = (e: React.MouseEvent, result: boolean) => {
     e.stopPropagation();
+    
+    // 긍정적인 피드백 메시지 설정
+    const message = result 
+        ? "정말 멋져요! 훌륭합니다! 🎉" 
+        : "괜찮아요! 다음 기회에 화이팅! 💪";
+    setFeedback(message);
+
+    // 1.5초 후 피드백 제거
+    setTimeout(() => {
+        setFeedback(null);
+    }, 1500);
+
     if (selectedSlot) {
         onRecord(result, selectedSlot);
         setSelectedSlot(null);
@@ -199,10 +212,20 @@ const HabitItem: React.FC<HabitItemProps> = ({ habit, onRecord, onDeleteRecord, 
   return (
     <div 
         onClick={onClick}
-        className={`bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg cursor-pointer active:scale-[0.99] ${
+        className={`relative bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300 hover:shadow-lg cursor-pointer active:scale-[0.99] ${
             !habit.activate ? 'opacity-60 grayscale-[80%]' : ''
         } ${habit.time.length === 0 && habit.todayRecords?.length ? 'bg-gray-50/80' : ''}`}
     >
+      {/* Feedback Overlay */}
+      {feedback && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/95 backdrop-blur-md rounded-2xl animate-fade-in transition-all">
+              <div className="text-center transform scale-110">
+                <div className="text-4xl mb-2 animate-bounce">{feedback.includes('🎉') ? '🎉' : '💪'}</div>
+                <p className="text-lg font-bold text-gray-800 break-keep px-4">{feedback.replace(/🎉|💪/g, '').trim()}</p>
+              </div>
+          </div>
+      )}
+
       <div className="flex items-start justify-between">
         <div className="flex items-center flex-1 overflow-hidden mr-2">
           <div className="min-w-0 flex-1">
